@@ -45,6 +45,15 @@ export function useWebSocket() {
       if (!socketUrl) {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         socketUrl = `${protocol}//${window.location.host}/ws`;
+      } else {
+        if (socketUrl.startsWith('http://')) {
+          socketUrl = socketUrl.replace('http://', 'ws://');
+        } else if (socketUrl.startsWith('https://')) {
+          socketUrl = socketUrl.replace('https://', 'wss://');
+        }
+        if (!socketUrl.endsWith('/ws')) {
+          socketUrl = socketUrl.replace(/\/+$/, '') + '/ws';
+        }
       }
       console.log('[useWebSocket] Establishing WebSocket connection to', socketUrl);
       setConnectionStatus('connecting');
