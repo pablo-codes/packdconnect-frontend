@@ -1,23 +1,19 @@
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { contactsApi } from "../api/contacts";
-import { apiClient } from "../api/apiClient";
+import { contactsApi, type ContactsResponse } from "../api/contacts";
 
 export function useContactsQueries(searchQuery: string = "") {
   const queryClient = useQueryClient();
 
-  const contactsQuery = useInfiniteQuery({
+  const contactsQuery = useInfiniteQuery<ContactsResponse>({
     queryKey: ['contacts', searchQuery],
     queryFn: async ({ pageParam = 1 }) => {
-      // The old inline query manually added page & limit & search to the URL.
-      // Assuming backend supports page and limit, we must adjust contactsApi to accept them,
-      // or we can just fetch the raw URL through apiClient here.
-      // Wait, contactsApi.getContacts only takes `paginate: boolean`. 
-      // Let's import apiClient directly for this to keep it simple, or we can use contactsApi if we update it.
-      // Since we should use apiClient, let's just do that here or update contacts.ts later.
-      // For now, let's use the explicit endpoint as it was.
-      return apiClient(`/api/contacts?page=${pageParam}&limit=15&search=${searchQuery}`);
+      return contactsApi.getContacts({
+        page: pageParam as number,
+        limit: 15,
+        search: searchQuery,
+      });
     },
-    getNextPageParam: (lastPage: any) => {
+    getNextPageParam: (lastPage) => {
       const { page, pages } = lastPage.pagination;
       return page < pages ? page + 1 : undefined;
     },
