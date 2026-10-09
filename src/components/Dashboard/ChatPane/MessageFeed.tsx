@@ -28,7 +28,7 @@ export const MessageFeed: React.FC<MessageFeedProps> = ({
   return (
     <div
       ref={scrollContainerRef}
-      className="flex-grow overflow-y-auto p-6 bg-background flex flex-col gap-5 custom-scrollbar"
+      className="flex-grow min-h-0 overflow-y-auto p-4 md:p-6 bg-background flex flex-col gap-5 custom-scrollbar"
     >
       {isFetchingMessages && (
         <div className="flex justify-center py-2 shrink-0">

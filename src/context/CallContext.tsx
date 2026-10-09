@@ -244,10 +244,9 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const stream = await initLocalStream(callType);
     if (!stream) return; // Media acquisition error, handled in state
 
-    // Setup connection
-    const pc = createPeerConnection(targetUserId);
-
     try {
+      // Setup connection
+      const pc = createPeerConnection(targetUserId);
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
 
@@ -287,9 +286,8 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
 
-    const pc = createPeerConnection(activeCall.hostId);
-
     try {
+      const pc = createPeerConnection(activeCall.hostId);
       // Set remote SDP description
       await pc.setRemoteDescription(new RTCSessionDescription(incomingOfferRef.current));
       

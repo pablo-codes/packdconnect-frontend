@@ -23,13 +23,13 @@ const DashboardView: React.FC = () => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   return (
-    <div className="flex h-[100dvh] w-screen overflow-hidden bg-background p-0 ">
+    <div className="flex h-full max-h-[100dvh] w-screen overflow-hidden bg-background p-0">
       <Sidebar
         isCollapsed={isSidebarCollapsed}
         setIsCollapsed={setIsSidebarCollapsed}
       />
 
-      <div className="flex-grow h-full flex flex-col min-w-0 md:ml-4 bg-transparent md:rounded-3xl overflow-hidden relative z-0">
+      <div className="flex-grow h-full min-h-0 flex flex-col min-w-0 md:ml-4 bg-transparent md:rounded-3xl overflow-hidden relative z-0">
         <Outlet />
       </div>
 

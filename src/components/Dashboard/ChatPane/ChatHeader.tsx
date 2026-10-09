@@ -24,7 +24,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   const navigate = useNavigate();
 
   return (
-    <header className="h-[72px] border-b border-surface-variant px-4 md:px-6 flex items-center justify-between shrink-0 bg-surface-lowest select-none">
+    <header className="h-[72px] border-b border-surface-variant px-4 md:px-6 flex items-center justify-between shrink-0 bg-surface-lowest select-none sticky top-0 z-20">
       <div className="flex items-center gap-3">
         <button
           onClick={() => {

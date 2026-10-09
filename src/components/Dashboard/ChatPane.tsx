@@ -183,9 +183,9 @@ export const ChatPane: React.FC = () => {
     };
   }, []);
 
-  if (!activeRoomId || !activeRoom) {
+  if (!activeRoomId) {
     return (
-      <div className="hidden md:flex flex-grow h-full flex-col items-center justify-center bg-background z-10 p-8 select-none">
+      <div className="hidden md:flex flex-grow h-full min-h-0 flex-col items-center justify-center bg-background z-10 p-8 select-none">
         <div className="flex flex-col items-center gap-4 text-center max-w-[360px]">
           <div className="w-16 h-16 rounded-full bg-surface-container-low border border-surface-variant flex items-center justify-center text-on-surface-variant shadow-sm">
             <MessageSquare size={32} />
@@ -198,6 +198,17 @@ export const ChatPane: React.FC = () => {
             exchange secure messages and WebRTC calls.
           </p>
         </div>
+      </div>
+    );
+  }
+
+  if (!activeRoom) {
+    return (
+      <div className="flex-grow h-full min-h-0 flex flex-col bg-background z-10 items-center justify-center p-8 select-none">
+        <span className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full mb-3"></span>
+        <span className="text-[13px] font-semibold text-on-surface-variant">
+          Loading conversation...
+        </span>
       </div>
     );
   }
@@ -222,7 +233,7 @@ export const ChatPane: React.FC = () => {
   const isPeerOnline = getPeerPresence() === "online";
 
   return (
-    <div className="flex-grow h-full flex flex-col bg-background z-10">
+    <div className="flex-grow h-full min-h-0 flex flex-col bg-background z-10 overflow-hidden">
       <ChatHeader
         activeRoom={activeRoom}
         currentUser={currentUser}

@@ -1,18 +1,67 @@
 import { useState, useRef, useCallback } from 'react';
 
+const normalizeIceUrl = (rawUrl: string, defaultScheme: 'stun' | 'turn'): string[] => {
+  if (!rawUrl || typeof rawUrl !== 'string') return [];
+
+  const parts = rawUrl.split(',').map((s) => s.trim()).filter(Boolean);
+  const results: string[] = [];
+
+  for (let part of parts) {
+    // Strip accidental surrounding quotes or whitespace
+    part = part.replace(/^['"]|['"]$/g, '');
+
+    // Strip http:// or https:// if mistakenly provided
+    part = part.replace(/^https?:\/\//i, '');
+
+    // If scheme is missing (e.g. '43.157.3.31' or '43.157.3.31:3478')
+    if (
+      !part.startsWith('stun:') &&
+      !part.startsWith('stuns:') &&
+      !part.startsWith('turn:') &&
+      !part.startsWith('turns:')
+    ) {
+      if (!part.includes(':')) {
+        part = `${part}:3478`;
+      }
+      part = `${defaultScheme}:${part}`;
+    }
+
+    // For TURN, browsers require explicit transport definitions (udp and/or tcp)
+    if (part.startsWith('turn:') || part.startsWith('turns:')) {
+      if (!part.includes('?transport=')) {
+        results.push(`${part}?transport=udp`);
+        results.push(`${part}?transport=tcp`);
+        continue;
+      }
+    }
+    results.push(part);
+  }
+
+  return results;
+};
+
 const getIceServers = (): RTCConfiguration => {
   const servers: RTCIceServer[] = [];
 
-  const stunUrl = import.meta.env.VITE_STUN_SERVER || 'stun:stun.l.google.com:19302';
-  servers.push({ urls: stunUrl });
+  const defaultStuns = [
+    'stun:stun.l.google.com:19302',
+    'stun:stun1.l.google.com:19302',
+  ];
 
-  const turnUrl = import.meta.env.VITE_TURN_SERVER;
-  if (turnUrl) {
-    servers.push({
-      urls: turnUrl,
-      username: import.meta.env.VITE_TURN_USERNAME || '',
-      credential: import.meta.env.VITE_TURN_PASSWORD || ''
-    });
+  const customStun = import.meta.env.VITE_STUN_SERVER;
+  const stunUrls = customStun ? normalizeIceUrl(customStun, 'stun') : [];
+  servers.push({ urls: Array.from(new Set([...stunUrls, ...defaultStuns])) });
+
+  const customTurn = import.meta.env.VITE_TURN_SERVER;
+  if (customTurn) {
+    const turnUrls = normalizeIceUrl(customTurn, 'turn');
+    if (turnUrls.length > 0) {
+      servers.push({
+        urls: turnUrls,
+        username: import.meta.env.VITE_TURN_USERNAME || '',
+        credential: import.meta.env.VITE_TURN_PASSWORD || '',
+      });
+    }
   }
 
   return { iceServers: servers };
@@ -74,7 +123,21 @@ export function useWebRTC(sendWsMessage: (payload: any) => void, onDisconnect: (
   }, []);
 
   const createPeerConnection = useCallback((targetUserId: string) => {
-    const pc = new RTCPeerConnection(getIceServers());
+    let pc: RTCPeerConnection;
+    try {
+      pc = new RTCPeerConnection(getIceServers());
+    } catch (err) {
+      console.warn(
+        '[useWebRTC] Failed to initialize RTCPeerConnection with configured ICE servers. Falling back to default Google STUN:',
+        err
+      );
+      pc = new RTCPeerConnection({
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' },
+        ],
+      });
+    }
     pcRef.current = pc;
 
     pc.onicecandidate = (event) => {
