@@ -44,6 +44,7 @@ export const ChatPane: React.FC = () => {
     isFetchingMessages,
     sendMessage,
     sendTyping,
+    createRoom,
     users,
   } = useChat();
 
@@ -144,14 +145,24 @@ export const ChatPane: React.FC = () => {
     sendTyping(false);
   };
 
-  const handleCall = (callType: "voice" | "video") => {
+  const handleCall = async (callType: "voice" | "video") => {
     if (!activeRoom || activeRoom.is_group) return;
 
     const targetPeer =
       activeRoom.participants.find((p) => p.id !== currentUser?.id) ||
       activeRoom.participants[0];
-    if (targetPeer) {
-      initiateCall(activeRoom.id, targetPeer.id, callType);
+    if (!targetPeer) return;
+
+    try {
+      let roomId = activeRoom.id;
+      if (roomId.startsWith("draft-")) {
+        roomId = await createRoom([targetPeer.id], false);
+        setActiveRoomId(roomId);
+        navigate(`/chat/${roomId}`);
+      }
+      await initiateCall(roomId, targetPeer.id, callType);
+    } catch (err) {
+      console.error("[ChatPane] Error initiating call from chat header:", err);
     }
   };
 
