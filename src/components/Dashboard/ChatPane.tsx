@@ -211,7 +211,12 @@ export const ChatPane: React.FC = () => {
       activeRoom.participants[0];
     if (!peer) return null;
     const sysUser = users.find((u) => u.id === peer.id);
-    return sysUser?.presence || "offline";
+    const peerPresence = (peer as any).presence;
+    const sysPresence = sysUser?.presence;
+    if (sysPresence === 'online' || peerPresence === 'online') {
+      return 'online';
+    }
+    return sysPresence || peerPresence || "offline";
   };
 
   const isPeerOnline = getPeerPresence() === "online";

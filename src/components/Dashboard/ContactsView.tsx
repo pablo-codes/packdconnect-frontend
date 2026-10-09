@@ -44,7 +44,7 @@ export const ContactsView: React.FC = () => {
         email: c.email,
         role: "Team Member",
         tag: "Product",
-        isActive: false,
+        isActive: c.presence === "online",
       }))
     );
   }, [data]);
@@ -67,15 +67,18 @@ export const ContactsView: React.FC = () => {
     return () => observer.disconnect();
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
-  const getIsActive = (contactId: string) => {
-    if (contactId === currentUser?.id) return true;
-    const sysUser = users.find((u) => u.id === contactId);
-    return sysUser?.presence === "online";
+  const getIsActive = (contact: ListItemContact) => {
+    if (contact.id === currentUser?.id) return true;
+    const sysUser = users.find((u) => u.id === contact.id);
+    if (sysUser?.presence) {
+      return sysUser.presence === "online";
+    }
+    return contact.isActive;
   };
 
   const displayContacts: ListItemContact[] = contacts.map((c) => ({
     ...c,
-    isActive: getIsActive(c.id),
+    isActive: getIsActive(c),
   }));
 
   const handleMessage = (contact: ListItemContact) => {

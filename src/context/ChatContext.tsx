@@ -166,6 +166,19 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     registerWsHandler('message', (data) => {
       const newMsg: Message = data.message;
       
+      // If a message arrives from someone, they are actively online
+      if (newMsg.sender_id !== currentUser?.id) {
+        setUsers((prev) => {
+          const index = prev.findIndex((u) => u.id === newMsg.sender_id);
+          if (index !== -1) {
+            const updated = [...prev];
+            updated[index] = { ...updated[index], presence: 'online' };
+            return updated;
+          }
+          return prev;
+        });
+      }
+
       if (activeRoomIdRef.current === newMsg.room_id) {
         queryClient.setQueryData(['messages', newMsg.room_id], (oldData: any) => {
           if (!oldData) return oldData;
@@ -191,10 +204,15 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (conv.id === newMsg.room_id) {
               found = true;
               const isUnread = activeRoomIdRef.current !== newMsg.room_id && newMsg.sender_id !== currentUser?.id;
+              // Also ensure sender participant presence is marked online
+              const updatedParticipants = conv.participants?.map((p: any) =>
+                p.id === newMsg.sender_id ? { ...p, presence: 'online' } : p
+              ) || conv.participants;
               return {
                 ...conv,
                 latest_message: newMsg,
                 unreadCount: (conv.unreadCount || 0) + (isUnread ? 1 : 0),
+                participants: updatedParticipants,
               };
             }
             return conv;
@@ -228,6 +246,18 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
           ...prev,
           [data.userId]: data.isTyping,
         }));
+      }
+
+      if (data.isTyping && data.userId !== currentUser?.id) {
+        setUsers((prev) => {
+          const index = prev.findIndex((u) => u.id === data.userId);
+          if (index !== -1 && prev[index].presence !== 'online') {
+            const updated = [...prev];
+            updated[index] = { ...updated[index], presence: 'online' };
+            return updated;
+          }
+          return prev;
+        });
       }
     });
 
@@ -275,9 +305,49 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     registerWsHandler('presence_change', (data) => {
-      setUsers((prev) =>
-        prev.map((u) => (u.id === data.userId ? { ...u, presence: data.status } : u))
-      );
+      // 1. Update users state (contacts and discovered users)
+      setUsers((prev) => {
+        const index = prev.findIndex((u) => u.id === data.userId);
+        if (index !== -1) {
+          const updated = [...prev];
+          updated[index] = { ...updated[index], presence: data.status };
+          return updated;
+        }
+        return [
+          ...prev,
+          {
+            id: data.userId,
+            username: '',
+            email: '',
+            created_at: new Date().toISOString(),
+            presence: data.status,
+          },
+        ];
+      });
+
+      // 2. Update participant presence in conversations query cache
+      queryClient.setQueryData(['conversations'], (oldData: any) => {
+        if (!oldData) return oldData;
+        return {
+          ...oldData,
+          pages: oldData.pages.map((page: any[]) =>
+            page.map((conv: any) => {
+              if (conv.participants) {
+                return {
+                  ...conv,
+                  participants: conv.participants.map((p: any) =>
+                    p.id === data.userId ? { ...p, presence: data.status } : p
+                  ),
+                };
+              }
+              return conv;
+            })
+          ),
+        };
+      });
+
+      // 3. Update contacts query cache if active
+      queryClient.invalidateQueries({ queryKey: ['contacts'] });
     });
 
     return () => {

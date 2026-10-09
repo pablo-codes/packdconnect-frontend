@@ -30,6 +30,7 @@ export const InboxList: React.FC<InboxListProps> = ({
     activeRoomId,
     setActiveRoomId,
     typingStatus,
+    users,
   } = useChat();
 
   const observer = useRef<IntersectionObserver | null>(null);
@@ -99,6 +100,9 @@ export const InboxList: React.FC<InboxListProps> = ({
             const isActive = conv.id === activeRoomId;
             const isTyping = conv.participants.some((p) => typingStatus[p.id]);
             const hasUnread = !!conv.unreadCount && conv.unreadCount > 0;
+            const peer = !conv.is_group ? conv.participants?.find((p) => p.id !== currentUser?.id) || conv.participants?.[0] : null;
+            const sysUser = peer ? users.find((u) => u.id === peer.id) : null;
+            const isPeerOnline = peer ? (sysUser?.presence === 'online' || (peer as any).presence === 'online') : false;
 
             return (
               <div
@@ -119,11 +123,16 @@ export const InboxList: React.FC<InboxListProps> = ({
                 }`}
               >
                 {/* Conversation Avatar */}
-                <div className="w-11 h-11 rounded-full bg-primary/10 border border-surface-variant flex items-center justify-center text-primary font-bold shrink-0">
-                  {conv.is_group ? (
-                    <Users size={18} />
-                  ) : (
-                    getRoomName(conv)[0]?.toUpperCase() || "C"
+                <div className="relative shrink-0">
+                  <div className="w-11 h-11 rounded-full bg-primary/10 border border-surface-variant flex items-center justify-center text-primary font-bold">
+                    {conv.is_group ? (
+                      <Users size={18} />
+                    ) : (
+                      getRoomName(conv)[0]?.toUpperCase() || "C"
+                    )}
+                  </div>
+                  {!conv.is_group && isPeerOnline && (
+                    <span className="absolute bottom-0 right-0 w-3 h-3 bg-secondary rounded-full border-2 border-surface-lowest" />
                   )}
                 </div>
 
