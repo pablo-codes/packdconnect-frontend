@@ -2,13 +2,14 @@ import { apiClient } from './apiClient';
 
 export const chatApi = {
   getConversations: (limit: number = 20, offset: number = 0) => 
-    apiClient<any[]>(`/api/chat/conversations?limit=${limit}&offset=${offset}`),
+    apiClient<any[]>('/api/chat/conversations', {
+      params: { limit, offset },
+    }),
 
-  getMessages: (roomId: string, limit: number = 30, before?: string) => {
-    let url = `/api/chat/conversations/${roomId}/messages?limit=${limit}`;
-    if (before) url += `&before=${encodeURIComponent(before)}`;
-    return apiClient<any[]>(url);
-  },
+  getMessages: (roomId: string, limit: number = 30, before?: string) => 
+    apiClient<any[]>(`/api/chat/conversations/${roomId}/messages`, {
+      params: { limit, before },
+    }),
 
   createRoom: (participantIds: string[], isGroup: boolean, name?: string) => 
     apiClient<any>('/api/chat/rooms', {

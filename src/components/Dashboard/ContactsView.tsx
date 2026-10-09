@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useChat } from '../../context/ChatContext';
+import { useCall } from '../../context/CallContext';
 import { Search, Plus } from 'lucide-react';
 import { AddContactModal } from './AddContactModal';
 import type { Contact as ListItemContact } from './ContactListItem';
@@ -11,7 +12,8 @@ import { useContactsQueries } from '../../queries/useContactsQueries';
 export const ContactsView: React.FC = () => {
   const navigate = useNavigate();
   const { user: currentUser } = useAuth();
-  const { conversations, setActiveRoomId, users } = useChat();
+  const { conversations, setActiveRoomId, users, createRoom } = useChat();
+  const { initiateCall } = useCall();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
@@ -19,7 +21,6 @@ export const ContactsView: React.FC = () => {
   const [modalError, setModalError] = useState<string | null>(null);
   
   const observerTarget = useRef<HTMLDivElement>(null);
-  const callTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // TanStack Infinite Query for paginated contacts with search
   const {
@@ -66,15 +67,6 @@ export const ContactsView: React.FC = () => {
     return () => observer.disconnect();
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
-  // Clean up call timeout on unmount
-  useEffect(() => {
-    return () => {
-      if (callTimeoutRef.current) {
-        clearTimeout(callTimeoutRef.current);
-      }
-    };
-  }, []);
-
   const getIsActive = (contactId: string) => {
     if (contactId === currentUser?.id) return true;
     const sysUser = users.find((u) => u.id === contactId);
@@ -101,25 +93,23 @@ export const ContactsView: React.FC = () => {
     }
   };
 
-  const handleCall = (contact: ListItemContact) => {
-    const existingDm = conversations.find(
-      (c) => !c.is_group && c.participants.some((p) => p.id === contact.id)
-    );
-    if (existingDm) {
-      navigate(`/chat/${existingDm.id}`);
-      if (callTimeoutRef.current) {
-        clearTimeout(callTimeoutRef.current);
+  const handleCall = async (contact: ListItemContact) => {
+    try {
+      let roomId: string;
+      const existingDm = conversations.find(
+        (c) => !c.is_group && c.participants.some((p) => p.id === contact.id)
+      );
+      if (existingDm) {
+        roomId = existingDm.id;
+      } else {
+        // Create DM room first so we have a valid room UUID for WebRTC signaling
+        roomId = await createRoom([contact.id], false);
       }
-      callTimeoutRef.current = setTimeout(() => {
-        const initiateBtn = document.querySelector('[title="Start Voice Call"]') as HTMLButtonElement;
-        if (initiateBtn) initiateBtn.click();
-        callTimeoutRef.current = null;
-      }, 500);
-    } else {
-      console.log('[ContactsView] No active room for direct call. Opening draft...');
-      const draftRoomId = `draft-${contact.id}`;
-      setActiveRoomId(draftRoomId);
-      navigate(`/chat/${draftRoomId}`);
+      setActiveRoomId(roomId);
+      navigate(`/chat/${roomId}`);
+      await initiateCall(roomId, contact.id, 'voice');
+    } catch (err) {
+      console.error('[ContactsView] Error initiating direct call:', err);
     }
   };
 

@@ -8,6 +8,7 @@ import {
   Outlet,
 } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
+import { WebSocketProvider } from "./context/WebSocketContext";
 import { ChatProvider } from "./context/ChatContext";
 import { CallProvider } from "./context/CallContext";
 import { AuthCard } from "./components/Auth/AuthCard";
@@ -94,11 +95,13 @@ const LoginRoute: React.FC = () => {
 const ProtectedLayout: React.FC = () => {
   return (
     <ProtectedRoute>
-      <ChatProvider>
-        <CallProvider>
-          <Outlet />
-        </CallProvider>
-      </ChatProvider>
+      <WebSocketProvider>
+        <ChatProvider>
+          <CallProvider>
+            <Outlet />
+          </CallProvider>
+        </ChatProvider>
+      </WebSocketProvider>
     </ProtectedRoute>
   );
 };

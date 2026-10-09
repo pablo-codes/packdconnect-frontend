@@ -1,7 +1,7 @@
 // src/api/apiClient.ts
 
 export interface ApiClientOptions extends RequestInit {
-  // Custom options can go here
+  params?: Record<string, any>;
   _retry?: boolean;
 }
 
@@ -12,7 +12,21 @@ const API_BASE = (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '');
  * Automatically includes credentials (cookies) for authentication.
  */
 export async function apiClient<T = any>(url: string, options: ApiClientOptions = {}): Promise<T> {
-  const fullUrl = url.startsWith('http') ? url : `${API_BASE}${url.startsWith('/') ? url : `/${url}`}`;
+  let resolvedUrl = url;
+  if (options.params) {
+    const searchParams = new URLSearchParams();
+    Object.entries(options.params).forEach(([key, val]) => {
+      if (val !== undefined && val !== null && val !== '') {
+        searchParams.set(key, String(val));
+      }
+    });
+    const queryString = searchParams.toString();
+    if (queryString) {
+      resolvedUrl += (resolvedUrl.includes('?') ? '&' : '?') + queryString;
+    }
+  }
+
+  const fullUrl = resolvedUrl.startsWith('http') ? resolvedUrl : `${API_BASE}${resolvedUrl.startsWith('/') ? resolvedUrl : `/${resolvedUrl}`}`;
   const mergedOptions: RequestInit = {
     ...options,
     headers: new Headers(options.headers || {}),

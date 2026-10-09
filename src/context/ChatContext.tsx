@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useMemo } from 'react';
 import { useAuth } from './AuthContext';
 import { useQueryClient } from '@tanstack/react-query';
-import { useWebSocket } from '../hooks/useWebSocket';
+import { useWebSocketContext } from './WebSocketContext';
 import { useChatQueries } from '../queries/useChatQueries';
 import { contactsApi } from '../api/contacts';
 import type { Conversation, Message, SystemUser } from '../types';
@@ -39,7 +39,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [users, setUsers] = useState<SystemUser[]>([]);
   const [typingStatus, setTypingStatus] = useState<Record<string, boolean>>({});
 
-  const { connectionStatus, sendWsMessage, registerWsHandler, unregisterWsHandler } = useWebSocket();
+  const { connectionStatus, sendWsMessage, registerWsHandler, unregisterWsHandler } = useWebSocketContext();
 
   const activeRoomIdRef = useRef<string | null>(null);
   const isTransitioningFromDraftRef = useRef<boolean>(false);

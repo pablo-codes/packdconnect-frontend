@@ -37,19 +37,13 @@ export interface AddContactResponse {
 
 export const contactsApi = {
   getContacts: (params?: GetContactsParams | boolean): Promise<ContactsResponse> => {
-    let query = '';
-    if (typeof params === 'boolean') {
-      query = `?paginate=${params}`;
-    } else if (params) {
-      const searchParams = new URLSearchParams();
-      if (params.page !== undefined) searchParams.set('page', String(params.page));
-      if (params.limit !== undefined) searchParams.set('limit', String(params.limit));
-      if (params.search && params.search.trim()) searchParams.set('search', params.search.trim());
-      if (params.paginate !== undefined) searchParams.set('paginate', String(params.paginate));
-      const str = searchParams.toString();
-      if (str) query = `?${str}`;
-    }
-    return apiClient<ContactsResponse>(`/api/contacts${query}`);
+    const queryParams: Record<string, any> =
+      typeof params === 'boolean'
+        ? { paginate: params }
+        : params || {};
+    return apiClient<ContactsResponse>('/api/contacts', {
+      params: queryParams,
+    });
   },
 
   addContact: (emailOrPayload: string | { email: string }): Promise<AddContactResponse> => {

@@ -1,7 +1,10 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from './AuthContext';
 import { useChat } from './ChatContext';
+import { useWebSocketContext } from './WebSocketContext';
 import { useWebRTC } from '../hooks/useWebRTC';
+import { RingToneSynthesizer } from '../utils/audioSynthesizer';
+import { evaluateDNDPolicy } from '../utils/dndPolicy';
 import type { ActiveCall } from '../types';
 
 interface CallContextType {
@@ -17,143 +20,10 @@ interface CallContextType {
 
 const CallContext = createContext<CallContextType | undefined>(undefined);
 
-class RingToneSynthesizer {
-  private ctx: AudioContext | null = null;
-  private interval: any = null;
-  private oscillators: OscillatorNode[] = [];
-
-  startRinging() {
-    this.stop();
-    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-    if (!AudioContextClass) return;
-    this.ctx = new AudioContextClass();
-    
-    const playRing = () => {
-      if (!this.ctx || this.ctx.state === 'closed') return;
-      
-      const osc1 = this.ctx.createOscillator();
-      const osc2 = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-
-      osc1.type = 'sine';
-      osc1.frequency.setValueAtTime(440, this.ctx.currentTime);
-      osc2.type = 'sine';
-      osc2.frequency.setValueAtTime(480, this.ctx.currentTime);
-
-      gain.gain.setValueAtTime(0, this.ctx.currentTime);
-      gain.gain.linearRampToValueAtTime(0.15, this.ctx.currentTime + 0.05);
-      gain.gain.setValueAtTime(0.15, this.ctx.currentTime + 0.35);
-      gain.gain.linearRampToValueAtTime(0, this.ctx.currentTime + 0.4);
-      
-      gain.gain.setValueAtTime(0, this.ctx.currentTime + 0.5);
-      gain.gain.linearRampToValueAtTime(0.15, this.ctx.currentTime + 0.55);
-      gain.gain.setValueAtTime(0.15, this.ctx.currentTime + 0.85);
-      gain.gain.linearRampToValueAtTime(0, this.ctx.currentTime + 0.9);
-
-      osc1.connect(gain);
-      osc2.connect(gain);
-      gain.connect(this.ctx.destination);
-
-      this.oscillators.push(osc1, osc2);
-
-      osc1.start();
-      osc2.start();
-      osc1.stop(this.ctx.currentTime + 1.0);
-      osc2.stop(this.ctx.currentTime + 1.0);
-
-      // Remove from array after they finish
-      setTimeout(() => {
-        this.oscillators = this.oscillators.filter(o => o !== osc1 && o !== osc2);
-      }, 1200);
-    };
-
-    try {
-      playRing();
-      this.interval = setInterval(playRing, 2000);
-    } catch (e) {
-      console.warn('[CallContext] Failed to start ringing sound:', e);
-    }
-  }
-
-  startDialing() {
-    this.stop();
-    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-    if (!AudioContextClass) return;
-    this.ctx = new AudioContextClass();
-    
-    const playDial = () => {
-      if (!this.ctx || this.ctx.state === 'closed') return;
-      
-      const osc1 = this.ctx.createOscillator();
-      const osc2 = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-
-      osc1.type = 'sine';
-      osc1.frequency.setValueAtTime(350, this.ctx.currentTime);
-      osc2.type = 'sine';
-      osc2.frequency.setValueAtTime(440, this.ctx.currentTime);
-
-      gain.gain.setValueAtTime(0, this.ctx.currentTime);
-      gain.gain.linearRampToValueAtTime(0.08, this.ctx.currentTime + 0.05);
-      gain.gain.setValueAtTime(0.08, this.ctx.currentTime + 0.95);
-      gain.gain.linearRampToValueAtTime(0, this.ctx.currentTime + 1.0);
-
-      osc1.connect(gain);
-      osc2.connect(gain);
-      gain.connect(this.ctx.destination);
-
-      this.oscillators.push(osc1, osc2);
-
-      osc1.start();
-      osc2.start();
-      osc1.stop(this.ctx.currentTime + 1.1);
-      osc2.stop(this.ctx.currentTime + 1.1);
-
-      // Remove from array after they finish
-      setTimeout(() => {
-        this.oscillators = this.oscillators.filter(o => o !== osc1 && o !== osc2);
-      }, 1300);
-    };
-
-    try {
-      playDial();
-      this.interval = setInterval(playDial, 2500);
-    } catch (e) {
-      console.warn('[CallContext] Failed to start dialing sound:', e);
-    }
-  }
-
-  stop() {
-    if (this.interval) {
-      clearInterval(this.interval);
-      this.interval = null;
-    }
-    // Stop all active oscillators explicitly
-    this.oscillators.forEach((osc) => {
-      try {
-        osc.stop();
-      } catch (e) {
-        // May already be stopped
-      }
-    });
-    this.oscillators = [];
-
-    if (this.ctx) {
-      try {
-        if (this.ctx.state !== 'closed') {
-          this.ctx.close();
-        }
-      } catch (e) {
-        console.warn('[CallContext] Error closing AudioContext:', e);
-      }
-      this.ctx = null;
-    }
-  }
-}
-
 export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user: currentUser } = useAuth();
-  const { sendWsMessage, registerWsHandler, unregisterWsHandler, users } = useChat();
+  const { users } = useChat();
+  const { sendWsMessage, registerWsHandler, unregisterWsHandler } = useWebSocketContext();
 
   const sendWsMessageRef = useRef(sendWsMessage);
   const currentUserRef = useRef(currentUser);
@@ -194,24 +64,14 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (activeCall.status === 'ringing') {
         const isIncoming = activeCall.targetUserId === currentUser?.id;
         if (isIncoming) {
-          // Log call for repeat bypass logic
           const callerId = activeCall.hostId;
           const now = Date.now();
           const callerHistory = recentCallsRef.current.get(callerId) || [];
           recentCallsRef.current.set(callerId, [...callerHistory, now]);
 
-          // Check DND settings
-          const dndEnabled = localStorage.getItem("packdconnect_settings_dnd") === "true";
-          const allowRepeat = localStorage.getItem("packdconnect_settings_dnd_repeat") === "true";
-          
-          let shouldRing = !dndEnabled;
-          if (dndEnabled && allowRepeat) {
-             // Check if caller called in the last 3 minutes (180000ms) excluding the current call
-             const recentCalls = callerHistory.filter(t => now - t <= 180000);
-             if (recentCalls.length > 0) {
-               shouldRing = true;
-               console.log('[CallContext] DND bypassed for repeat caller');
-             }
+          const { shouldRing, bypassed } = evaluateDNDPolicy(callerId, recentCallsRef.current);
+          if (bypassed) {
+            console.log('[CallContext] DND bypassed for repeat caller');
           }
 
           if (shouldRing) {
@@ -282,37 +142,27 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     registerWsHandler('call_incoming', async (data) => {
       console.log('[CallContext] Received call_incoming from', data.hostId);
 
-      // Read DND settings from localStorage
-      const dndEnabled = localStorage.getItem('packdconnect_settings_dnd') === 'true';
-      const allowRepeatCalls = localStorage.getItem('packdconnect_settings_dnd_repeat') === 'true';
+      // Evaluate DND policy
+      const now = Date.now();
+      if (!recentCallsRef.current.has(data.hostId)) {
+        recentCallsRef.current.set(data.hostId, []);
+      }
+      const attempts = recentCallsRef.current.get(data.hostId)!
+        .filter(t => now - t < 3 * 60 * 1000);
+      attempts.push(now);
+      recentCallsRef.current.set(data.hostId, attempts);
 
-      if (dndEnabled) {
-        const now = Date.now();
-        const threeMinutes = 3 * 60 * 1000;
-
-        if (!recentCallsRef.current.has(data.hostId)) {
-          recentCallsRef.current.set(data.hostId, []);
-        }
-
-        const attempts = recentCallsRef.current.get(data.hostId)!
-          .filter(t => now - t < threeMinutes);
-
-        attempts.push(now);
-        recentCallsRef.current.set(data.hostId, attempts);
-
-        const bypass = allowRepeatCalls && attempts.length >= 2;
-
-        if (!bypass) {
-          console.log('[CallContext] Call suppressed silently by DND. Host:', data.hostId);
-          // Reject silently
-          sendWsMessageRef.current({
-            type: 'call_reject',
-            callId: data.callId,
-            targetUserId: data.hostId,
-          });
-          return;
-        }
-
+      const { shouldRing, bypassed } = evaluateDNDPolicy(data.hostId, recentCallsRef.current);
+      if (!shouldRing) {
+        console.log('[CallContext] Call suppressed silently by DND. Host:', data.hostId);
+        sendWsMessageRef.current({
+          type: 'call_reject',
+          callId: data.callId,
+          targetUserId: data.hostId,
+        });
+        return;
+      }
+      if (bypassed) {
         console.log('[CallContext] DND Bypassed due to repeat call attempts. Ringing call.');
       }
 
@@ -355,6 +205,12 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     });
 
+    // 0. Handle call initiated acknowledgment from server with true callId
+    registerWsHandler('call_initiated', (data) => {
+      console.log('[CallContext] Received call_initiated with persistent callId:', data.callId);
+      setActiveCall((prev) => (prev ? { ...prev, callId: data.callId } : null));
+    });
+
     // 4. Handle call rejected by peer
     registerWsHandler('call_rejected', () => {
       console.log('[CallContext] Call rejected by peer.');
@@ -368,6 +224,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     return () => {
+      unregisterWsHandler('call_initiated');
       unregisterWsHandler('call_incoming');
       unregisterWsHandler('call_answered');
       unregisterWsHandler('ice_candidate');
@@ -464,12 +321,15 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const isHost = activeCall.hostId === currentUserRef.current?.id;
     const targetUserId = isHost ? activeCall.targetUserId : activeCall.hostId;
     console.log(`[CallContext] Rejecting/Canceling call ID: ${activeCall.callId}, targetUserId: ${targetUserId}`);
-    
-    sendWsMessageRef.current({
-      type: 'call_reject',
-      callId: activeCall.callId,
-      targetUserId,
-    });
+
+    // Only send WS reject if callId is a real ID (avoid sending 'dialing-placeholder' which crashes Postgres)
+    if (activeCall.callId && activeCall.callId !== 'dialing-placeholder') {
+      sendWsMessageRef.current({
+        type: 'call_reject',
+        callId: activeCall.callId,
+        targetUserId,
+      });
+    }
 
     cleanupCall();
   };
@@ -480,12 +340,14 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     console.log('[CallContext] Hanging up call ID:', activeCall.callId);
 
     const peerId = activeCall.hostId === currentUserRef.current?.id ? activeCall.targetUserId : activeCall.hostId;
-    
-    sendWsMessageRef.current({
-      type: 'call_hangup',
-      callId: activeCall.callId,
-      targetUserId: peerId,
-    });
+
+    if (activeCall.callId && activeCall.callId !== 'dialing-placeholder') {
+      sendWsMessageRef.current({
+        type: 'call_hangup',
+        callId: activeCall.callId,
+        targetUserId: peerId,
+      });
+    }
 
     cleanupCall();
   };
