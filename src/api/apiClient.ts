@@ -5,11 +5,14 @@ export interface ApiClientOptions extends RequestInit {
   _retry?: boolean;
 }
 
+const API_BASE = (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '');
+
 /**
  * A central base client for all API calls.
  * Automatically includes credentials (cookies) for authentication.
  */
 export async function apiClient<T = any>(url: string, options: ApiClientOptions = {}): Promise<T> {
+  const fullUrl = url.startsWith('http') ? url : `${API_BASE}${url.startsWith('/') ? url : `/${url}`}`;
   const mergedOptions: RequestInit = {
     ...options,
     headers: new Headers(options.headers || {}),
@@ -27,13 +30,13 @@ export async function apiClient<T = any>(url: string, options: ApiClientOptions 
     }
   }
 
-  let response = await fetch(url, mergedOptions);
+  let response = await fetch(fullUrl, mergedOptions);
 
   // Transparent Token Refresh Logic
   if (response.status === 401 && !url.includes('/api/auth/') && !options._retry) {
     try {
       // Attempt to refresh token
-      const refreshResponse = await fetch('/api/auth/refresh', {
+      const refreshResponse = await fetch(`${API_BASE}/api/auth/refresh`, {
         method: 'POST',
         credentials: 'include',
       });
@@ -41,7 +44,7 @@ export async function apiClient<T = any>(url: string, options: ApiClientOptions 
       if (refreshResponse.ok) {
         // Retry original request
         options._retry = true;
-        response = await fetch(url, mergedOptions);
+        response = await fetch(fullUrl, mergedOptions);
       } else {
         // Refresh failed, user is actually unauthorized
         throw new Error('Unauthorized');

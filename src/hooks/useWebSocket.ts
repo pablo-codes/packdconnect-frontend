@@ -30,7 +30,8 @@ export function useWebSocket() {
 
     const establishConnection = async () => {
       try {
-        await fetch('/api/auth/refresh', {
+        const apiBase = (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '');
+        await fetch(`${apiBase}/api/auth/refresh`, {
           method: 'POST',
           credentials: 'include',
         });
